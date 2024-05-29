@@ -5,6 +5,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.activations import gelu
 
 class ResNet():
+    ''' Klasa tworząca sieć RestNet 2D w oparciu o sieć konwolucyjną'''
 
     def __init__(self, filters,activation_in,activation_out=None, kernel_size=5,dropout_rate = .45, stride=2, output_units=1):
         self.filters = filters
@@ -18,18 +19,21 @@ class ResNet():
         else:
             self.activation_out = activation_out
     def residual_block(self,x):
-        # Convolutional layer 1
-        x_shortcut = x
+        '''
+        Tworzenie bloku residualnego 
+        '''
+        # 1. Warstwa konwolucyjna
+        x_shortcut = x # Tworzenie informacji kótra ma przeciec do dalszych warstw sieci
         x = Conv2D(self.filters, kernel_size=self.kernel_size, strides=self.stride, padding='same')(x)
         x = BatchNormalization()(x)
         x = self.activation(x)
-        
         x = Dropout(self.dropout_rate)(x)
-        # Convolutional layer 2
+        
+        # 2. Warstwa konwolucyjna
         x = Conv2D(self.filters, kernel_size=self.kernel_size, padding='same')(x)
         x = BatchNormalization()(x)
         
-        # Residual connection
+        # Połączenie residualne
         if self.stride != 1 or x_shortcut.shape[-1] != self.filters:
             x_shortcut = Conv2D(self.filters, kernel_size=1, strides=self.stride, padding='same')(x_shortcut)
         x = tf.keras.layers.add([x, x_shortcut])
@@ -37,10 +41,13 @@ class ResNet():
         return x
 
     def build_resnet(self,x, num_blocks=3,pooling = GlobalAveragePooling2D()):
-        #input_layer = Input(shape=input_shape)
-        #x = input_layer
+
+        '''
+        Tworzenie sieci z bloków residualnych
+        '''
+        
+        
         num_filters = self.filters
-        # Initial convolutional layer
         x = Conv2D(num_filters, kernel_size=7, padding='same', strides=2)(x)
         x = BatchNormalization()(x)
         x = LeakyReLU()(x)
@@ -49,20 +56,19 @@ class ResNet():
                 x = self.residual_block(x)
                 if x.shape[1] >= 2 and x.shape[2] >= 2:
                     num_filters*=2
-            # Global average pooling
             x = pooling(x)
         else:
-            # Residual blocks
             for _ in range(num_blocks):
                 x = self.residual_block(x)
                 if x.shape[1] >= 2 and x.shape[2] >= 2:
-                    # Pooling
+                
                     x = pooling(x)
                     num_filters*=2
-            # Flatten
+
         x = Flatten()(x)
         x = Dense(units = 1, activation = 'linear')(x)
         return x
+        
     def stworz_i_wyucz_Model(self,input_shape,X_train, y_train, num_blocks=3,pooling = GlobalAveragePooling2D(),epochs = 30,batch_size = 32,loss_function = tf.keras.losses.MeanAbsoluteError(),optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001)):
         # Defining input shape and building the model
         # Flatten
@@ -80,6 +86,9 @@ class ResNet():
         return model
     
 class ResNet1D():
+    
+    '''Klasa tworząca sieć RestNet w wersji 1D'''
+    
     def __init__(self, filters,activation_in,activation_out=None, kernel_size=5,dropout_rate = .45, stride=2, output_units=1):
         self.filters = filters
         self.kernel_size = kernel_size
@@ -154,6 +163,9 @@ class ResNet1D():
         return model
 
 class ResNetMLP():
+    
+    '''Klasa tworząca sieć RestNet w oparciu o perceptron wielowarstwowy'''
+    
     def __init__(self, activation_in,activation_out=None,dropout_rate = .45, output_units=2):
 
         self.dropout_rate = dropout_rate
