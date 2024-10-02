@@ -21,22 +21,23 @@ def siec_rekurencyjna(x,warstwy,wyjscia,aktywacja_LSTM,aktywacja_rekurencji,drop
     
     return out
 
-def siec_konwolucyjna(x,warstwy,filtry,strides,kernel_size,aktywacja,pooling,pooling_type = 'global',out_act = 'linear'):
+def siec_konwolucyjna(x,warstwy,filtry,strides,kernel_size,aktywacja,pooling,drop,l2_ratio,pooling_type = 'global',out_act = 'linear'):
 
     if type(filtry)==int:
-        filtry = [filtry for _ in range(filtry)]
+        filtry = [filtry for _ in range(warstwy)]
     if type(strides)==int:
-        strides = [strides for _ in range(strides)]
+        strides = [strides for _ in range(warstwy)]
     if type(aktywacja)!=list:
-        aktywacja = [aktywacja for _ in range(aktywacja)]
+        aktywacja = [aktywacja for _ in range(warstwy)]
     if pooling_type!='global' and type(pooling)!=list:
-        pooling = [pooling for _ in range(pooling)]
+        pooling = [pooling for _ in range(warstwy)]
     for i in range(warstwy):
-        
-        x = Conv2D(filters=filtry[i],kernel_size = kernel_size,strides = strides[i],padding = 'same')(x)
+        x = BatchNormalization()(x)
+        x = Conv2D(filters=filtry[i],kernel_size = kernel_size,strides = strides[i],kernel_regularizer=l2(l2_ratio), padding = 'same')(x)
         x = aktywacja(x)
         if pooling_type!='global':
             x = pooling[i](x)
+        x = Dropout(drop)(x)
     if pooling_type=='global':
         x = pooling(x)
     x = Flatten()(x)
