@@ -1,3 +1,4 @@
+from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
 
 from tensorflow.keras.layers import LSTM, Dense, Conv2D, Flatten, BatchNormalization, Dropout,Activation
 from tensorflow.keras.regularizers import l2
