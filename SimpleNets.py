@@ -1,3 +1,5 @@
+import numpy as np
+
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin, ClassifierMixin
 from sklearn.utils.validation import check_is_fitted
 
@@ -10,9 +12,10 @@ from tensorflow.keras.optimizers import Adam
 
 import plotly.graph_objects as go 
 
-# Function generative basic architecture, which can be used
-# in functional API tensorflow
-callbacs = [
+# Basic set of callbacks to optimizing learning time - using as
+# default callbacks 
+
+callbacks = [
     ReduceLROnPlateau(patience=5, min_delta=.001), 
     TerminateOnNaN(), 
     EarlyStopping(patience=10, min_delta=.1, restore_best_weights=True)
@@ -256,8 +259,8 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
         )
         self.model = Model(inputs=self.input, outputs=self._fun_model)
         
-    def fit(self, X, y, epochs=10, optimizer=Adam(learning_rate=.1), val_ratio=.1,
-            loss="mse", batch_size=None):
+    def fit(self, X, y, max_epochs=10, optimizer=Adam(learning_rate=.1), val_ratio=.1,
+            loss="mse", batch_size=None, callbacks=callbacks):
         
         self.model.compile(
             optimizer=optimizer,
@@ -268,7 +271,7 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
             x=X, 
             y=y,
             validation_split=val_ratio,
-            callbacks=callbacs,
+            callbacks=callbacks,
             batch_size=batch_size,
             epochs=epochs
         )
@@ -282,22 +285,27 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
         check_is_fitted(self)
         return self.model.predict(X)
         
-    def plot_learning_curve(self):
+    def plot_learning_curve(self, mode="lines"):
         
         check_is_fitted(self)
         
         l = self._history.history['loss']
         v = self._history.history['val_loss']
-        ep = self._history.epoch
+        ep = np.array(self._history.epoch) + 1
         
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=ep, y=l, name="training"))
-        fig.add_trace(go.Scatter(x=ep, y=v, name="validation"))
+        fig.add_trace(go.Scatter(x=ep, y=l, name="training", mode=mode))
+        fig.add_trace(go.Scatter(x=ep, y=v, name="validation", mode=mode))
         fig.update_layout(
             xaxis_title="Epochs",
             yaxis_title="Loss value",
-            title="Learning curve",
-            hovermode='x'
+            title=dict(
+                text="Learning curve",
+                x=.5,
+                font=dict(size=25)
+            ),
+            hovermode='x',
+            template='plotly_dark'
         )
         fig.show()
         return fig
