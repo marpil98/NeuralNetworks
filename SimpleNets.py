@@ -22,7 +22,7 @@ callbacks = [
     ]
 
 def lstm(
-    x, layers, outputs, activation, recursive_activation,
+    x, layers, output, units, activation, recursive_activation,
     drop, l2_ratio, out_act='linear', batch_normalization=True
     ):
     """
@@ -34,9 +34,11 @@ def lstm(
         Input
     layers : int
         Number of layers
-    outputs : int
+    output : int
         Number of outputs - determines problem's type - 1 = regression,
         more = classification/multiple regression
+    units : int/list
+        Number of lstm units
     activation : str
         Activation function for LSTM part
     recursive_activation : str
@@ -58,9 +60,9 @@ def lstm(
     tf.keras.layers
         Output layer. Can be used in another layer as input
     """
-    if type(outputs) == int:
+    if type(units) == int:
         
-        outputs = [outputs for _ in range(layers)]
+        units = [units for _ in range(layers)]
         
     if type(activation)==str:
         
@@ -79,7 +81,7 @@ def lstm(
         if i == (layers - 1):
             
             x = LSTM(
-                units=outputs[i], activation=activation[i], 
+                units=units[i], activation=activation[i], 
                 recurrent_activation=recursive_activation[i],
                 return_sequences=False, dropout=drop, 
                 kernel_regularizer=l2(l2_ratio)
@@ -89,13 +91,13 @@ def lstm(
             
             print(activation[i])
             x = LSTM(
-                units=outputs[i], activation=activation[i],
+                units=units[i], activation=activation[i],
                 recurrent_activation=recursive_activation[i],
                 return_sequences=True, dropout=drop,
                 kernel_regularizer=l2(l2_ratio)
                 )(x)
             
-    out = Dense(units = 1,activation = out_act)(x)
+    out = Dense(units=output, activation = out_act)(x)
     
     return out
 
@@ -232,13 +234,12 @@ def MLP(x, layers, neurons, activation):
 class LSTMRegressor(BaseEstimator, RegressorMixin):
     
     def __init__(
-    self, input_shape, layers, activation="tanh", 
-    recursive_activation="sigmoid", drop=0.0, l2_ratio=0.0, 
-    out_act='linear', batch_normalization=True, callbacks=None
-    ):
+        self, input_shape, layers, units=10, activation="tanh", 
+        recursive_activation="sigmoid", drop=0.0, l2_ratio=0.0, 
+        out_act='linear', batch_normalization=True, callbacks=None
+        ):
         super().__init__()
 
-        # Zachowanie zgodności ze stylem scikit-learn
         self.input_shape = input_shape
         self.layers = layers
         self.activation = activation
@@ -248,11 +249,11 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
         self.out_act = out_act
         self.batch_normalization = batch_normalization
         self.callbacks = callbacks
-
-        # Tworzenie modelu
+        self.units = units
+        
         self.input = Input(input_shape)
         self._fun_model = lstm(
-            x=self.input, layers=layers, outputs=1, activation=activation,
+            x=self.input, layers=layers, units=units, output=1, activation=activation,
             recursive_activation=recursive_activation, drop=drop,
             l2_ratio=l2_ratio, out_act=out_act, 
             batch_normalization=batch_normalization
@@ -273,7 +274,7 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
             validation_split=val_ratio,
             callbacks=callbacks,
             batch_size=batch_size,
-            epochs=epochs
+            epochs=max_epochs
         )
         
         self._is_fitted = True
@@ -308,6 +309,94 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
             template='plotly_dark'
         )
         fig.show()
+        return fig
+    
+    def __sklearn_is_fitted__(self):
+        """
+        Check fitted status and return a Boolean value.
+        """
+        return hasattr(self, "_is_fitted") and self._is_fitted
+    
+class LSTMClassifier(BaseEstimator, ClassifierMixin):
+    
+    def __init__(
+        self, input_shape, layers, n_classes=2, units=10, activation="tanh", 
+        recursive_activation="sigmoid", drop=0.0, l2_ratio=0.0, 
+        out_act='sigmoid', batch_normalization=True, callbacks=None
+        ):
+        super().__init__()
+
+        self.input_shape = input_shape
+        self.layers = layers
+        self.activation = activation
+        self.recursive_activation = recursive_activation
+        self.drop = drop
+        self.l2_ratio = l2_ratio
+        self.out_act = out_act
+        self.batch_normalization = batch_normalization
+        self.callbacks = callbacks
+        self.n_classes = n_classes
+        self.units = units
+
+        self.input = Input(input_shape)
+        self._fun_model = lstm(
+            x=self.input, layers=layers, units=units, output=n_classes, activation=activation,
+            recursive_activation=recursive_activation, drop=drop,
+            l2_ratio=l2_ratio, out_act=out_act, 
+            batch_normalization=batch_normalization
+        )
+        self.model = Model(inputs=self.input, outputs=self._fun_model)
+        
+    def fit(self, X, y, max_epochs=10, optimizer=Adam(learning_rate=.1), val_ratio=.1,
+            loss="mse", batch_size=None, callbacks=callbacks):
+        
+        self.model.compile(
+            optimizer=optimizer,
+            loss=loss
+        )
+        print(X.shape)
+        self._history = self.model.fit(
+            x=X, 
+            y=y,
+            validation_split=val_ratio,
+            callbacks=callbacks,
+            batch_size=batch_size,
+            epochs=max_epochs
+        )
+        
+        self._is_fitted = True
+        
+        return self
+    
+    def predict(self, X):
+        
+        check_is_fitted(self)
+        return np.argmax(self.model.predict(X), axis=1)
+        
+    def plot_learning_curve(self, mode="lines"):
+        
+        check_is_fitted(self)
+        
+        l = self._history.history['loss']
+        v = self._history.history['val_loss']
+        ep = np.array(self._history.epoch) + 1
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ep, y=l, name="training", mode=mode))
+        fig.add_trace(go.Scatter(x=ep, y=v, name="validation", mode=mode))
+        fig.update_layout(
+            xaxis_title="Epochs",
+            yaxis_title="Loss value",
+            title=dict(
+                text="Learning curve",
+                x=.5,
+                font=dict(size=25)
+            ),
+            hovermode='x',
+            template='plotly_dark'
+        )
+        fig.show()
+        
         return fig
     
     def __sklearn_is_fitted__(self):
