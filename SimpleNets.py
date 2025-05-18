@@ -1,4 +1,5 @@
 from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin, ClassifierMixin
+from sklearn.utils.validation import check_is_fitted
 
 from tensorflow.keras.layers import LSTM, Dense, Conv2D
 from tensorflow.keras.layers import Flatten, BatchNormalization, Dropout, Activation, Input
@@ -6,6 +7,9 @@ from tensorflow.keras.regularizers import l2
 from tensorflow.keras import Model 
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, TerminateOnNaN
 from tensorflow.keras.optimizers import Adam
+
+import plotly.graph_objects as go 
+
 # Function generative basic architecture, which can be used
 # in functional API tensorflow
 callbacs = [
@@ -225,11 +229,24 @@ def MLP(x, layers, neurons, activation):
 class LSTMRegressor(BaseEstimator, RegressorMixin):
     
     def __init__(
-        self, input_shape, layers, activation="tanh", 
-        recursive_activation="sigmoid", drop=0.0, l2_ratio=0.0, out_act='linear', 
-        batch_normalization=True, callbacks=callbacs
-        ):
+    self, input_shape, layers, activation="tanh", 
+    recursive_activation="sigmoid", drop=0.0, l2_ratio=0.0, 
+    out_act='linear', batch_normalization=True, callbacks=None
+    ):
         super().__init__()
+
+        # Zachowanie zgodności ze stylem scikit-learn
+        self.input_shape = input_shape
+        self.layers = layers
+        self.activation = activation
+        self.recursive_activation = recursive_activation
+        self.drop = drop
+        self.l2_ratio = l2_ratio
+        self.out_act = out_act
+        self.batch_normalization = batch_normalization
+        self.callbacks = callbacks
+
+        # Tworzenie modelu
         self.input = Input(input_shape)
         self._fun_model = lstm(
             x=self.input, layers=layers, outputs=1, activation=activation,
@@ -238,7 +255,6 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
             batch_normalization=batch_normalization
         )
         self.model = Model(inputs=self.input, outputs=self._fun_model)
-        self.callbacsk=callbacks
         
     def fit(self, X, y, epochs=10, optimizer=Adam(learning_rate=.1), val_ratio=.1,
             loss="mse", batch_size=None):
@@ -248,7 +264,7 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
             loss=loss
         )
         print(X.shape)
-        self.model.fit(
+        self._history = self.model.fit(
             x=X, 
             y=y,
             validation_split=val_ratio,
@@ -256,9 +272,38 @@ class LSTMRegressor(BaseEstimator, RegressorMixin):
             batch_size=batch_size,
             epochs=epochs
         )
+        
+        self._is_fitted = True
+        
+        return self
     
     def predict(self, X):
         
+        check_is_fitted(self)
         return self.model.predict(X)
         
+    def plot_learning_curve(self):
         
+        check_is_fitted(self)
+        
+        l = self._history.history['loss']
+        v = self._history.history['val_loss']
+        ep = self._history.epoch
+        
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=ep, y=l, name="training"))
+        fig.add_trace(go.Scatter(x=ep, y=v, name="validation"))
+        fig.update_layout(
+            xaxis_title="Epochs",
+            yaxis_title="Loss value",
+            title="Learning curve",
+            hovermode='x'
+        )
+        fig.show()
+        return fig
+    
+    def __sklearn_is_fitted__(self):
+        """
+        Check fitted status and return a Boolean value.
+        """
+        return hasattr(self, "_is_fitted") and self._is_fitted
