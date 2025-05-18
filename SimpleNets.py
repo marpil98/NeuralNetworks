@@ -1,13 +1,21 @@
-from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
+from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin, ClassifierMixin
 
-from tensorflow.keras.layers import LSTM, Dense, Conv2D, Flatten, BatchNormalization, Dropout,Activation
+from tensorflow.keras.layers import LSTM, Dense, Conv2D
+from tensorflow.keras.layers import Flatten, BatchNormalization, Dropout, Activation, Input
 from tensorflow.keras.regularizers import l2
-
+from tensorflow.keras import Model 
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, TerminateOnNaN
+from tensorflow.keras.optimizers import Adam
 # Function generative basic architecture, which can be used
 # in functional API tensorflow
+callbacs = [
+    ReduceLROnPlateau(patience=5, min_delta=.001), 
+    TerminateOnNaN(), 
+    EarlyStopping(patience=10, min_delta=.1, restore_best_weights=True)
+    ]
 
-def recursive_net(
-    x, layers, outputs, LSTM_activation, recursive_activation,
+def lstm(
+    x, layers, outputs, activation, recursive_activation,
     drop, l2_ratio, out_act='linear', batch_normalization=True
     ):
     """
@@ -22,7 +30,7 @@ def recursive_net(
     outputs : int
         Number of outputs - determines problem's type - 1 = regression,
         more = classification/multiple regression
-    LSTM_activation : str
+    activation : str
         Activation function for LSTM part
     recursive_activation : str
         Activation function for recursive part
@@ -47,9 +55,9 @@ def recursive_net(
         
         outputs = [outputs for _ in range(layers)]
         
-    if type(LSTM_activation)==str:
+    if type(activation)==str:
         
-        LSTM_activation = [LSTM_activation for _ in range(layers)]
+        activation = [activation for _ in range(layers)]
         
     if type(recursive_activation)==str:
         
@@ -64,7 +72,7 @@ def recursive_net(
         if i == (layers - 1):
             
             x = LSTM(
-                units=outputs[i], activation=LSTM_activation[i], 
+                units=outputs[i], activation=activation[i], 
                 recurrent_activation=recursive_activation[i],
                 return_sequences=False, dropout=drop, 
                 kernel_regularizer=l2(l2_ratio)
@@ -72,9 +80,9 @@ def recursive_net(
             
         else:
             
-            print(LSTM_activation[i])
+            print(activation[i])
             x = LSTM(
-                units=outputs[i], activation=LSTM_activation[i],
+                units=outputs[i], activation=activation[i],
                 recurrent_activation=recursive_activation[i],
                 return_sequences=True, dropout=drop,
                 kernel_regularizer=l2(l2_ratio)
@@ -212,3 +220,45 @@ def MLP(x, layers, neurons, activation):
     out = Activation(activation[i])(x)
     
     return out
+
+
+class LSTMRegressor(BaseEstimator, RegressorMixin):
+    
+    def __init__(
+        self, input_shape, layers, activation="tanh", 
+        recursive_activation="sigmoid", drop=0.0, l2_ratio=0.0, out_act='linear', 
+        batch_normalization=True, callbacks=callbacs
+        ):
+        super().__init__()
+        self.input = Input(input_shape)
+        self._fun_model = lstm(
+            x=self.input, layers=layers, outputs=1, activation=activation,
+            recursive_activation=recursive_activation, drop=drop,
+            l2_ratio=l2_ratio, out_act=out_act, 
+            batch_normalization=batch_normalization
+        )
+        self.model = Model(inputs=self.input, outputs=self._fun_model)
+        self.callbacsk=callbacks
+        
+    def fit(self, X, y, epochs=10, optimizer=Adam(learning_rate=.1), val_ratio=.1,
+            loss="mse", batch_size=None):
+        
+        self.model.compile(
+            optimizer=optimizer,
+            loss=loss
+        )
+        print(X.shape)
+        self.model.fit(
+            x=X, 
+            y=y,
+            validation_split=val_ratio,
+            callbacks=callbacs,
+            batch_size=batch_size,
+            epochs=epochs
+        )
+    
+    def predict(self, X):
+        
+        return self.model.predict(X)
+        
+        
