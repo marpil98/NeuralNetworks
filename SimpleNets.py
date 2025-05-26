@@ -521,7 +521,7 @@ class ConvolutionalClassifier(BaseEstimator, ClassifierMixin):
             x=self.input, layers=layers, filters=filters, strides=strides, 
             kernel_size=kernel_size, activation=activation, pooling=pooling, 
             outputs=outputs, drop=drop, l2_ratio=l2_ratio, 
-            pooling_type='global', out_act='linear', batch_normalization=True
+            pooling_type='global', out_act='linear', batch_normalization=Trued
         )
         
         self.model = Model(inputs=self.input, outputs=self._fun_model)
