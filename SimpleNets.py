@@ -232,7 +232,9 @@ def MLP(x, layers, neurons, activation):
 
 
 class LSTMRegressor(BaseEstimator, RegressorMixin):
-    
+    """
+    Regressor using LSTM units to generate predictions
+    """
     def __init__(
         self, input_shape, layers, units=10, activation="tanh", 
         recursive_activation="sigmoid", drop=0.0, l2_ratio=0.0, 
@@ -490,6 +492,7 @@ class ConvolutionalRegressor(BaseEstimator, RegressorMixin):
         Check fitted status and return a Boolean value.
         """
         return hasattr(self, "_is_fitted") and self._is_fitted
+    
     
 class ConvolutionalClassifier(BaseEstimator, ClassifierMixin):
     
